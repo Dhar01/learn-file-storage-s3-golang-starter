@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -45,6 +46,10 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	defer file.Close()
 
 	mediaType := header.Header.Get("Content-Type")
+	if mediaType != "image/png" && mediaType != "image/jpeg" {
+		respondWithError(w, http.StatusBadRequest, "Unsupported media type: must be png or jpeg", fmt.Errorf("unsupported media type: must be image"))
+	}
+
 	imageData, err := io.ReadAll(file)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Could not read image data", err)
@@ -58,19 +63,22 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 
 	if video.UserID != userID {
-		respondWithError(w, http.StatusUnauthorized, "User doesn't have permission", fmt.Errorf("User doesn't have permission"))
+		respondWithError(w, http.StatusUnauthorized, "User doesn't have permission", fmt.Errorf("user doesn't have permission"))
 		return
 	}
 
-	saveThumb := thumbnail{
-		data:      imageData,
-		mediaType: mediaType,
-	}
+	base64ImageData := base64.StdEncoding.EncodeToString(imageData)
+	dataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, base64ImageData)
 
-	videoThumbnails[videoID] = saveThumb
+	// saveThumb := thumbnail{
+	// 	data:      imageData,
+	// 	mediaType: mediaType,
+	// }
 
-	port := cfg.port
-	urlThumbnail := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", port, videoID)
+	// videoThumbnails[videoID] = saveThumb
+
+	// port := cfg.port
+	// urlThumbnail := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", port, videoID)
 
 	updatedVideo := database.Video{
 		ID: video.ID,
@@ -79,7 +87,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 			Description: video.Description,
 			UserID:      video.UserID,
 		},
-		ThumbnailURL: &urlThumbnail,
+		ThumbnailURL: &dataURL,
 		VideoURL:     video.VideoURL,
 		CreatedAt:    video.CreatedAt,
 		UpdatedAt:    video.UpdatedAt,
