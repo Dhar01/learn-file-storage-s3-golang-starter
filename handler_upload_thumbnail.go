@@ -1,10 +1,11 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
@@ -46,7 +47,25 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	defer file.Close()
 
 	mediaType := header.Header.Get("Content-Type")
-	if mediaType != "image/png" && mediaType != "image/jpeg" {
+
+	// if mediaType != "image/png" && mediaType != "image/jpeg" {
+	// 	respondWithError(
+	// 		w,
+	// 		http.StatusBadRequest,
+	// 		"Unsupported media type: must be png or jpeg",
+	// 		fmt.Errorf("unsupported media type: must be image"),
+	// 	)
+	// 	return
+	// }
+
+	var extension string
+
+	switch mediaType {
+	case "image/png":
+		extension = ".png"
+	case "image/jpeg":
+		extension = ".jpeg"
+	default:
 		respondWithError(
 			w,
 			http.StatusBadRequest,
@@ -56,11 +75,11 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	imageData, err := io.ReadAll(file)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Could not read image data", err)
-		return
-	}
+	// imageData, err := io.ReadAll(file)
+	// if err != nil {
+	// 	respondWithError(w, http.StatusInternalServerError, "Could not read image data", err)
+	// 	return
+	// }
 
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
@@ -78,8 +97,31 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	base64ImageData := base64.StdEncoding.EncodeToString(imageData)
-	dataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, base64ImageData)
+	filePath := filepath.Join(cfg.assetsRoot, videoIDString+extension)
+	fileStoragePath, err := os.Create(filePath)
+	if err != nil {
+		respondWithError(
+			w,
+			http.StatusInternalServerError,
+			"can't create file on the filesystem",
+			fmt.Errorf("can't create file on the filesystem"),
+		)
+	}
+
+	defer fileStoragePath.Close()
+
+	if _, err := io.Copy(fileStoragePath, file); err != nil {
+		respondWithError(
+			w,
+			http.StatusInternalServerError,
+			"can't copy the contents of file to the storage file",
+			fmt.Errorf("can't copy the contents of file to the storage file"),
+		)
+	}
+
+	// // will be commented
+	// base64ImageData := base64.StdEncoding.EncodeToString(imageData)
+	// dataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, base64ImageData)
 
 	// saveThumb := thumbnail{
 	// 	data:      imageData,
@@ -88,8 +130,9 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	// videoThumbnails[videoID] = saveThumb
 
-	// port := cfg.port
+	port := cfg.port
 	// urlThumbnail := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", port, videoID)
+	urlThumbnail := fmt.Sprintf("http://localhost:%s/assets/%s%s", port, videoID, extension)
 
 	updatedVideo := database.Video{
 		ID: video.ID,
@@ -98,7 +141,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 			Description: video.Description,
 			UserID:      video.UserID,
 		},
-		ThumbnailURL: &dataURL,
+		ThumbnailURL: &urlThumbnail,
 		VideoURL:     video.VideoURL,
 		CreatedAt:    video.CreatedAt,
 		UpdatedAt:    video.UpdatedAt,
