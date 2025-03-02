@@ -47,7 +47,13 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	mediaType := header.Header.Get("Content-Type")
 	if mediaType != "image/png" && mediaType != "image/jpeg" {
-		respondWithError(w, http.StatusBadRequest, "Unsupported media type: must be png or jpeg", fmt.Errorf("unsupported media type: must be image"))
+		respondWithError(
+			w,
+			http.StatusBadRequest,
+			"Unsupported media type: must be png or jpeg",
+			fmt.Errorf("unsupported media type: must be image"),
+		)
+		return
 	}
 
 	imageData, err := io.ReadAll(file)
@@ -63,7 +69,12 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 
 	if video.UserID != userID {
-		respondWithError(w, http.StatusUnauthorized, "User doesn't have permission", fmt.Errorf("user doesn't have permission"))
+		respondWithError(
+			w,
+			http.StatusUnauthorized,
+			"User doesn't have permission",
+			fmt.Errorf("user doesn't have permission"),
+		)
 		return
 	}
 
