@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,6 +11,11 @@ import (
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
 	"github.com/google/uuid"
+)
+
+const (
+	imagePNG = "image/png"
+	imageJPEG = "image/jpeg"
 )
 
 func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Request) {
@@ -46,24 +52,24 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	defer file.Close()
 
-	mediaType := header.Header.Get("Content-Type")
-
-	// if mediaType != "image/png" && mediaType != "image/jpeg" {
-	// 	respondWithError(
-	// 		w,
-	// 		http.StatusBadRequest,
-	// 		"Unsupported media type: must be png or jpeg",
-	// 		fmt.Errorf("unsupported media type: must be image"),
-	// 	)
-	// 	return
-	// }
+	contentType := header.Header.Get("Content-Type")
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		respondWithError(
+			w,
+			http.StatusBadRequest,
+			"can't decode the content type",
+			fmt.Errorf("unsupported media type: can't decode the content type"),
+		)
+		return
+	}
 
 	var extension string
 
 	switch mediaType {
-	case "image/png":
+	case imagePNG:
 		extension = ".png"
-	case "image/jpeg":
+	case imageJPEG:
 		extension = ".jpeg"
 	default:
 		respondWithError(
