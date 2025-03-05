@@ -114,6 +114,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 			"can't generate random string",
 			fmt.Errorf("can't generate random string"),
 		)
+		return
 	}
 
 	path := base64.RawURLEncoding.EncodeToString(pathGenerator)
@@ -127,6 +128,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 			"can't create file on the filesystem",
 			fmt.Errorf("can't create file on the filesystem"),
 		)
+		return
 	}
 
 	defer fileStoragePath.Close()
@@ -138,6 +140,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 			"can't copy the contents of file to the storage file",
 			fmt.Errorf("can't copy the contents of file to the storage file"),
 		)
+		return
 	}
 
 	// // will be commented
