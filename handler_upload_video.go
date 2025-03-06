@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
 	"os"
+	"os/exec"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
@@ -98,13 +101,30 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	aspRatio, err := getVideoAspectRatio(temp.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "can't get the video ration", err)
+		return
+	}
+
 	// to read the file again from the beginning
 	if _, err := temp.Seek(0, io.SeekStart); err != nil {
 		respondWithError(w, http.StatusInternalServerError, "can't set the pointer to the beginning", err)
 		return
 	}
 
-	fileKey := fmt.Sprintf("%x.mp4", md5.Sum([]byte(uuid.New().String())))
+	var ratio string
+
+	switch aspRatio {
+	case "16:9":
+		ratio = "landscape"
+	case "9:16":
+		ratio = "portrait"
+	default:
+		ratio = "other"
+	}
+
+	fileKey := fmt.Sprintf("%s/%x.mp4", ratio, md5.Sum([]byte(uuid.New().String())))
 
 	// putting the video file/object to the s3 bucket
 	s3Obj := &s3.PutObjectInput{
@@ -119,7 +139,6 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// videoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileKey)
 	videoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileKey)
 
 	updateVideo := database.Video{
@@ -141,4 +160,40 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondWithJSON(w, http.StatusOK, updateVideo)
+}
+
+type Stream struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+type FFProbeOutput struct {
+	Streams []Stream `json:"streams"`
+}
+
+func getVideoAspectRatio(filePath string) (string, error) {
+	cmd := exec.Command("ffprobe", "-v", "error", "-print_format", "json", "-show_streams", filePath)
+	var stdoutBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+
+	var output FFProbeOutput
+
+	if err := json.Unmarshal(stdoutBuf.Bytes(), &output); err != nil {
+		return "", err
+	}
+
+	height := output.Streams[0].Height
+	width := output.Streams[0].Width
+
+	ratio := float64(width) / float64(height)
+
+	if ratio > 1.7 && ratio < 1.9 {
+		return "16:9", nil
+	} else if ratio > 0.5 && ratio < 0.6 {
+		return "9:16", nil
+	} else {
+		return "other", nil
+	}
 }
