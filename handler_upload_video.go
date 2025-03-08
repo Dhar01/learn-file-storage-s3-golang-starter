@@ -178,7 +178,13 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, updateVideo)
+	signedURLVideo, err := cfg.dbVideoToSignedVideo(updateVideo)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to use signedURL", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, signedURLVideo)
 }
 
 type Stream struct {
