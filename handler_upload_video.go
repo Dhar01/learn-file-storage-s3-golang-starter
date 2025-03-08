@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
@@ -101,6 +102,22 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// process for fast start video file
+	processedFilePath, err := processVideoForFastStart(temp.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "can't process the file", err)
+		return
+	}
+
+	processedFile, err := os.Open(processedFilePath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "can't open processed file", err)
+		return
+	}
+
+	defer processedFile.Close()
+	defer os.Remove(processedFilePath)
+
 	aspRatio, err := getVideoAspectRatio(temp.Name())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "can't get the video ration", err)
@@ -130,7 +147,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	s3Obj := &s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
 		Key:         &fileKey,
-		Body:        temp,
+		Body:        processedFile,
 		ContentType: &mediaType,
 	}
 
@@ -140,6 +157,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	videoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileKey)
+	// vdURL := fmt.Sprintf("%s,%s.mp4", cfg.s3Bucket, ratio)
 
 	updateVideo := database.Video{
 		ID: video.ID,
@@ -170,6 +188,7 @@ type FFProbeOutput struct {
 	Streams []Stream `json:"streams"`
 }
 
+// getting the aspect ratio of the video file
 func getVideoAspectRatio(filePath string) (string, error) {
 	cmd := exec.Command("ffprobe", "-v", "error", "-print_format", "json", "-show_streams", filePath)
 	var stdoutBuf bytes.Buffer
@@ -196,4 +215,29 @@ func getVideoAspectRatio(filePath string) (string, error) {
 	} else {
 		return "other", nil
 	}
+}
+
+// processing the video for the fast start
+func processVideoForFastStart(filePath string) (string, error) {
+	outFilePath := filePath + ".processing"
+	cmd := exec.Command("ffmpeg", "-i", filePath, "-c", "copy", "-movflags", "faststart", "-f", "mp4", outFilePath)
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+
+	return outFilePath, nil
+}
+
+func generatePresignedURL(s3Client *s3.Client, bucket, key string, expireTime time.Duration) (string, error) {
+	client := s3.NewPresignClient(s3Client)
+	req, err := client.PresignGetObject(context.Background(), &s3.GetObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
+	}, s3.WithPresignExpires(expireTime))
+
+	if err != nil {
+		return "", err
+	}
+
+	return req.URL, nil
 }
