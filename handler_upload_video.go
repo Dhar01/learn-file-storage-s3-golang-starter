@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -156,8 +157,8 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	videoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileKey)
-	// vdURL := fmt.Sprintf("%s,%s.mp4", cfg.s3Bucket, ratio)
+	// videoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileKey)
+	videoURL := fmt.Sprintf("%s,%s", cfg.s3Bucket, fileKey)
 
 	updateVideo := database.Video{
 		ID: video.ID,
@@ -240,4 +241,23 @@ func generatePresignedURL(s3Client *s3.Client, bucket, key string, expireTime ti
 	}
 
 	return req.URL, nil
+}
+
+func (cfg *apiConfig) dbVideoToSignedVideo(video database.Video) (database.Video, error) {
+	urlParts := strings.Split(*video.VideoURL, ",")
+	if len(urlParts) != 2 {
+		return database.Video{}, fmt.Errorf("invalid video url format")
+	}
+
+	bucket := urlParts[0]
+	key := urlParts[1]
+
+	url, err := generatePresignedURL(cfg.s3Client, bucket, key, (time.Minute * 15))
+	if err != nil {
+		return database.Video{}, err
+	}
+
+	video.VideoURL = &url
+
+	return video, nil
 }
