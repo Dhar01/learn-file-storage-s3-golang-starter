@@ -95,13 +95,13 @@ func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signedURLVideo, err := cfg.dbVideoToSignedVideo(video)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "can't use signed url", err)
-		return
-	}
+	// signedURLVideo, err := cfg.dbVideoToSignedVideo(video)
+	// if err != nil {
+	// 	respondWithError(w, http.StatusInternalServerError, "VideoGet: couldn't use signed url", err)
+	// 	return
+	// }
 
-	respondWithJSON(w, http.StatusOK, signedURLVideo)
+	respondWithJSON(w, http.StatusOK, video)
 }
 
 func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Request) {
@@ -110,6 +110,7 @@ func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Reque
 		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
 		return
 	}
+
 	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
@@ -122,16 +123,16 @@ func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	signedURLVideos := make([]database.Video, len(videos))
-	for i, video := range videos {
-		signedVideo, err := cfg.dbVideoToSignedVideo(video)
-		if err != nil {
-			respondWithError(w, http.StatusInternalServerError, "couldn't use signed url", err)
-			return
-		}
+	// signedURLVideos := make([]database.Video, 0, len(videos))
+	// for _, video := range videos {
+	// 	signedVideo, err := cfg.dbVideoToSignedVideo(video)
+	// 	if err != nil {
+	// 		respondWithError(w, http.StatusInternalServerError, "VideosRetrieve: couldn't use signed url", err)
+	// 		return
+	// 	}
+	// 	// signedURLVideos[i] = signedVideo
+	// 	signedURLVideos = append(signedURLVideos, signedVideo)
+	// }
 
-		signedURLVideos[i] = signedVideo
-	}
-
-	respondWithJSON(w, http.StatusOK, signedURLVideos)
+	respondWithJSON(w, http.StatusOK, videos)
 }
